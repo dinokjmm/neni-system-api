@@ -34,7 +34,7 @@ router.get('/todos', async (req, res) => {
 // routes/products.js
 router.post('/', async (req, res) => {
     try {
-        const nuevoProducto = new Producto(req.body); // Crea la instancia con los datos
+        const nuevoProducto = new Product(req.body); // Crea la instancia con los datos
         await nuevoProducto.save(); // Guarda en MongoDB Atlas
         res.status(201).json(nuevoProducto);
     } catch (error) {
