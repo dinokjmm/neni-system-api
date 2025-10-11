@@ -30,6 +30,19 @@ router.get('/todos', async (req, res) => {
     }
 });
 
+
+// routes/products.js
+router.post('/', async (req, res) => {
+    try {
+        const nuevoProducto = new Producto(req.body); // Crea la instancia con los datos
+        await nuevoProducto.save(); // Guarda en MongoDB Atlas
+        res.status(201).json(nuevoProducto);
+    } catch (error) {
+        console.error("Error al registrar producto:", error);
+        res.status(500).json({ message: "Error en el servidor al guardar el producto." });
+    }
+});
+
 // RUTA 2 (CRUD Básico): Cargar un nuevo producto (Para tu Panel de Admin)
 router.post('/', async (req, res) => {
     try {
