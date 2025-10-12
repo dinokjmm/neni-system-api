@@ -1,5 +1,4 @@
-/ models/ReglaCategoria.js
-const mongoose = require('mongoose');
+ const mongoose = require('mongoose');
 
 const subcategoriaSchema = new mongoose.Schema({
     nombre: { type: String, required: true },       // Ej: Deportivo
@@ -12,4 +11,4 @@ const reglaCategoriaSchema = new mongoose.Schema({
     subcategorias: [subcategoriaSchema]
 });
 
-module.exports = mongoose.model('ReglaCategoria', reglaCategoriaSchema);
+module.exports = mongoose.model('ReglaCategoria', reglaCategoriaSchema, 'reglasCategorias');

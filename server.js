@@ -12,26 +12,36 @@ const port = process.env.PORT || 5000;
 // 2. Middleware
 // Configuración de CORS: Permite a CUALQUIER frontend acceder a la API
 app.use(cors({
-    origin: '*', // Esto es temporal. Significa 'cualquier dominio'.
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+ origin: '*', 
+ methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
 
 app.use(express.json()); // Permite recibir datos en formato JSON
-// 4. Importar Rutas
-const productRoutes = require('./routes/products');
-app.use('/api/productos', productRoutes); 
 
 // 3. Conexión a la Base de Datos
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ Conexión a MongoDB Atlas exitosa.'))
-    .catch(err => console.error('❌ Error de conexión:', err));
+ .then(() => console.log('✅ Conexión a MongoDB Atlas exitosa.'))
+ .catch(err => console.error('❌ Error de conexión:', err));
 
-// 4. Ruta Raíz (solo para verificar que el servidor funciona)
+// 4. Importar Rutas y Configuración
+const productRoutes = require('./routes/products');
+// ⬅️ NUEVA IMPORTACIÓN: Asegúrate de que el nombre y la ruta sean correctos
+const reglasRoutes = require('./routes/reglas'); 
+
+
+// Usar rutas de productos
+app.use('/api/productos', productRoutes); 
+
+// ⬅️ NUEVA CONFIGURACIÓN: EXPONER LA RUTA /api/reglas
+app.use('/api/reglas', reglasRoutes);
+
+
+// 5. Ruta Raíz (solo para verificar que el servidor funciona)
 app.get('/', (req, res) => {
-    res.send('API del Neni-System Activa.');
+ res.send('API del Neni-System Activa.');
 });
 
-// 5. Iniciar el Servidor
+// 6. Iniciar el Servidor
 app.listen(port, () => {
-    console.log(`🚀 Servidor corriendo en http://localhost:${port}`);
+ console.log(`🚀 Servidor corriendo en http://localhost:${port}`);
 });
