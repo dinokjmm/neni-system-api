@@ -19,7 +19,7 @@ const ProductSchema = new mongoose.Schema({
     estatus: { 
         type: String, 
         required: true, 
-        enum: ['disponible', 'apartado-live', 'vendido-local', 'vendido-live'],
+        enum: ['disponible','disponible-publico'],
         default: 'disponible'
     },
     tallas: { type: [String] },

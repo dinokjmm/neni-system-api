@@ -46,7 +46,7 @@ const getNextSecuencia = async (prefijoCompleto) => {
 router.get('/catalogo', async (req, res) => {
  try {
   const products = await Product.find({
-   estatus: { $regex: 'disponible', $options: 'i' } 
+   estatus: { $regex: 'disponible-publico', $options: 'i' } 
   }).sort({ createdAt: -1 });
   res.json(products);
  } catch (error) {
