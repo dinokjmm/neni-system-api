@@ -1,174 +1,227 @@
 const express = require('express');
 const router = express.Router();
-const Product = require('../models/Product'); // Modelo de Producto
-const ReglaCategoria = require('../models/ReglaCategoria'); // Modelo de Reglas
+
+const Product = require('../models/Product');
+const ReglaCategoria = require('../models/ReglaCategoria');
+
+console.log('✅ Archivo routes/products cargado correctamente');
 
 // ----------------------------------------------------------------------
-// FUNCIÓN AUXILIAR: Obtiene el siguiente número de secuencia para el prefijo COMPLETO
+// FUNCIÓN AUXILIAR: Escapar texto para usarlo dentro de RegExp
 // ----------------------------------------------------------------------
-// Se ajustó para buscar por el prefijo completo (Ej: Z-DRI) y usar 4 dígitos.
-const getNextSecuencia = async (prefijoCompleto) => {
- try {
-  // Busca el producto con el código más alto que empiece con el prefijo completo
-  // Búsqueda: ^Z-DRI-\d{4}$ (4 dígitos al final)
-  const lastProduct = await Product.findOne({
-   codigo: new RegExp(`^${prefijoCompleto}-\\d{4}$`) 
-  }).sort({ codigo: -1 }).limit(1);
-
-  let nextNumber = 1;
-
-  if (lastProduct) {
-   // Extrae el número de secuencia (Ej: de "Z-DRI-0005" obtiene 5)
-   const lastCode = lastProduct.codigo;
-   
-   // Separa el código por el último guion para obtener la secuencia
-      const parts = lastCode.split('-');
-      const lastNumberString = parts[parts.length - 1]; // Obtiene "0005"
-      const lastNumber = parseInt(lastNumberString, 10); // Obtiene 5
-   
-   nextNumber = lastNumber + 1;
-  }
-  
-  // Formatea el número a 4 dígitos (Ej: 1 -> "0001")
-  return String(nextNumber).padStart(4, '0');
-  
- } catch (error) {
-  // Lanza un error para que el try/catch principal lo capture
-  throw new Error(`Fallo en la consulta de secuencia de código: ${error.message}`);
- }
+const escapeRegExp = (value) => {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
 // ----------------------------------------------------------------------
-// RUTAS GET (Mantenidas)
+// FUNCIÓN AUXILIAR: Obtiene el siguiente número de secuencia
 // ----------------------------------------------------------------------
+const getNextSecuencia = async (prefijoCompleto) => {
+  try {
+    const prefijoSeguro = escapeRegExp(prefijoCompleto);
 
-// RUTA 1: Obtener el Catálogo Público (SOLO DISPONIBLES)
+    const lastProduct = await Product.findOne({
+      codigo: new RegExp(`^${prefijoSeguro}-\\d{4}$`)
+    })
+      .sort({ codigo: -1 })
+      .limit(1);
+
+    let nextNumber = 1;
+
+    if (lastProduct && lastProduct.codigo) {
+      const parts = lastProduct.codigo.split('-');
+      const lastNumberString = parts[parts.length - 1];
+      const lastNumber = parseInt(lastNumberString, 10);
+
+      if (!isNaN(lastNumber)) {
+        nextNumber = lastNumber + 1;
+      }
+    }
+
+    return String(nextNumber).padStart(4, '0');
+  } catch (error) {
+    throw new Error(`Fallo en la consulta de secuencia de código: ${error.message}`);
+  }
+};
+
+// ----------------------------------------------------------------------
+// RUTA DE DIAGNÓSTICO
+// Sirve para saber si está leyendo la BD y colección correctas
+// ----------------------------------------------------------------------
+router.get('/diagnostico', async (req, res) => {
+  try {
+    const total = await Product.countDocuments({});
+
+    const ejemplos = await Product.find({})
+      .select('codigo estatus descripcion categoriaBase subcategoriaSeleccionada dueñoSeleccionado createdAt')
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    res.json({
+      message: 'Diagnóstico de productos',
+      database: Product.db.name,
+      collection: Product.collection.name,
+      totalProductos: total,
+      ejemplos
+    });
+  } catch (error) {
+    console.error('Error en diagnóstico:', error);
+    res.status(500).json({
+      message: 'Error al ejecutar diagnóstico.',
+      detail: error.message
+    });
+  }
+});
+
+// ----------------------------------------------------------------------
+// GET: Catálogo Público
+// Trae productos disponibles aunque el estatus venga con variantes
+// ----------------------------------------------------------------------
 router.get('/catalogo', async (req, res) => {
- try {
-  const products = await Product.find({
-   estatus: { $regex: 'disponible-publico', $options: 'i' } 
-  }).sort({ createdAt: -1 });
-  res.json(products);
- } catch (error) {
-  console.error('Error al obtener el catálogo:', error);
-  res.status(500).json({ message: 'Error en el servidor.' });
- }
-});
+  try {
+    const products = await Product.find({
+      $or: [
+        { estatus: { $regex: 'disponible-publico', $options: 'i' } },
+        { estatus: { $regex: 'disponible publico', $options: 'i' } },
+        { estatus: { $regex: 'disponible_público', $options: 'i' } },
+        { estatus: { $regex: 'disponible', $options: 'i' } },
+        { estatus: { $regex: 'publico', $options: 'i' } },
+        { estatus: { $regex: 'público', $options: 'i' } }
+      ]
+    }).sort({ createdAt: -1 });
 
-// RUTA DE PRUEBA: Trae ABSOLUTAMENTE TODO de la colección
-router.get('/todos', async (req, res) => {
- try {
-  const allProducts = await Product.find({}); 
-  res.json(allProducts);
- } catch (error) {
-  console.error('Error al obtener todos los productos:', error);
-  res.status(500).json({ message: 'Error en el servidor.' });
- }
+    res.json(products);
+  } catch (error) {
+    console.error('Error al obtener el catálogo:', error);
+    res.status(500).json({
+      message: 'Error en el servidor al obtener catálogo.',
+      detail: error.message
+    });
+  }
 });
 
 // ----------------------------------------------------------------------
-// RUTA POST: REGISTRO AUTOMATIZADO / MANUAL
+// GET: Trae absolutamente todo de la colección
+// ----------------------------------------------------------------------
+router.get('/todos', async (req, res) => {
+  try {
+    const allProducts = await Product.find({}).sort({ createdAt: -1 });
+    res.json(allProducts);
+  } catch (error) {
+    console.error('Error al obtener todos los productos:', error);
+    res.status(500).json({
+      message: 'Error en el servidor al obtener todos los productos.',
+      detail: error.message
+    });
+  }
+});
+
+// ----------------------------------------------------------------------
+// POST: Registro automatizado / manual
 // ----------------------------------------------------------------------
 router.post('/', async (req, res) => {
- try {
-  // ⬅️ Paso CRÍTICO: Recibimos todos los campos, incluyendo 'codigo' si se proporcionó manualmente
-  const { 
-      dueñoSeleccionado, 
-      categoriaBase, 
-      subcategoriaSeleccionada, 
-      codigo, // <-- Capturamos el código si fue ingresado manualmente
-      ...rest // El resto de campos (descripcion, precios, etc.)
-    } = req.body; 
+  try {
+    const {
+      dueñoSeleccionado,
+      categoriaBase,
+      subcategoriaSeleccionada,
+      codigo,
+      ...rest
+    } = req.body;
 
     let datosProducto;
-        let finalCode = codigo; // Usará el código manual si existe (o será undefined)
+    let finalCode = codigo ? String(codigo).trim() : '';
 
-        // ----------------------------------------------------------------------
-        // LÓGICA DE CÓDIGO
-        // ----------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // CASO 1: Código manual
+    // ------------------------------------------------------------------
+    if (finalCode !== '') {
+      console.log(`Usando código manual: ${finalCode}`);
 
-    if (finalCode && finalCode.trim() !== '') {
-            // Caso 1: Código manual provisto. Usar el código tal cual.
-            console.log(`Usando código manual: ${finalCode}`);
-
-            datosProducto = {
-        dueñoSeleccionado, 
+      datosProducto = {
+        dueñoSeleccionado,
         categoriaBase,
         subcategoriaSeleccionada,
-                ...rest, 
-        codigo: finalCode, // Usar el código manual proporcionado
-            };
-            
-        } else {
-            // Caso 2: Código NO provisto. Aplicar la regla de generación automática.
-            console.log('Generando código automáticamente...');
+        ...rest,
+        codigo: finalCode
+      };
+    } else {
+      // ------------------------------------------------------------------
+      // CASO 2: Código automático
+      // ------------------------------------------------------------------
+      console.log('Generando código automáticamente...');
 
-            // Se valida que existan los campos necesarios para la generación automática
-            if (!dueñoSeleccionado || !categoriaBase || !subcategoriaSeleccionada) {
-                 return res.status(400).json({ message: "Faltan campos de categorización (dueño, categoría base, subcategoría) requeridos para la generación automática de código." });
-            }
+      if (!dueñoSeleccionado || !categoriaBase || !subcategoriaSeleccionada) {
+        return res.status(400).json({
+          message: 'Faltan campos de categorización: dueño, categoría base o subcategoría.'
+        });
+      }
 
-            // 1. VALIDACIÓN y OBTENCIÓN DE PREFIJOS
-            const reglas = await ReglaCategoria.findOne({ categoriaBase: categoriaBase });
-            
-            if (!reglas) {
-                return res.status(400).json({ message: "Categoría base no encontrada. Revisa las reglas en MongoDB Atlas." });
-            }
-            
-            const subregla = reglas.subcategorias.find(s => s.nombre === subcategoriaSeleccionada);
-            
-            if (!subregla) {
-                return res.status(400).json({ message: "Subcategoría no válida o no encontrada en las reglas." });
-            }
-
-            // Prefijos para construir el código
-            const prefijoSubcategoria = subregla.prefijo; // Ej: RI
-            const categoriaPrefijo = categoriaBase[0]; // Ej: D
-            
-            // Prefijo Compacto: Ej: DRI (D + RI)
-            const prefijoCompacto = `${categoriaPrefijo}${prefijoSubcategoria}`;
-            
-            // Prefijo Completo (para buscar la secuencia): Ej: Z-DRI
-            const prefijoCompleto = `${dueñoSeleccionado}-${prefijoCompacto}`;
-            
-            // 2. GENERAR LA SECUENCIA (Usando el prefijo completo para unicidad)
-            const secuencia = await getNextSecuencia(prefijoCompleto); 
-            
-            // 3. CONSTRUIR EL CÓDIGO FINAL AUTOMÁTICO
-            finalCode = `${prefijoCompleto}-${secuencia}`;
-            
-            // 4. CONSTRUIR EL OBJETO FINAL (Automático)
-            datosProducto = {
-        dueñoSeleccionado, 
-        categoriaBase,
-        subcategoriaSeleccionada,
-                ...rest, // El resto de la data (descripcion, cantidad, precios, etc.)
-        codigo: finalCode, // <-- Código generado
-            };
-        }
-  
-  // 5. CREAR y GUARDAR
-  const nuevoProducto = new Product(datosProducto); 
-  await nuevoProducto.save(); 
-  
-  res.status(201).json(nuevoProducto);
- } catch (error) {
-  console.error("Error al registrar producto:", error);
-  
-  // Manejo de errores de validación de Mongoose
-  if (error.name === 'ValidationError') {
-   return res.status(400).json({ 
-        message: "Error de validación: faltan campos requeridos o el código es duplicado.", 
-        errors: error.errors 
+      const reglas = await ReglaCategoria.findOne({
+        categoriaBase: categoriaBase
       });
-  }
 
-  // Si la secuencia falló o fue otro error 500
-  res.status(500).json({ 
-   message: "Error en el servidor al guardar el producto.",
-   detail: error.message 
-  });
- }
+      if (!reglas) {
+        return res.status(400).json({
+          message: 'Categoría base no encontrada. Revisa las reglas en MongoDB Atlas.'
+        });
+      }
+
+      const subregla = reglas.subcategorias.find(
+        s => s.nombre === subcategoriaSeleccionada
+      );
+
+      if (!subregla) {
+        return res.status(400).json({
+          message: 'Subcategoría no válida o no encontrada en las reglas.'
+        });
+      }
+
+      const prefijoSubcategoria = subregla.prefijo;
+      const categoriaPrefijo = categoriaBase[0];
+
+      const prefijoCompacto = `${categoriaPrefijo}${prefijoSubcategoria}`;
+      const prefijoCompleto = `${dueñoSeleccionado}-${prefijoCompacto}`;
+
+      const secuencia = await getNextSecuencia(prefijoCompleto);
+
+      finalCode = `${prefijoCompleto}-${secuencia}`;
+
+      datosProducto = {
+        dueñoSeleccionado,
+        categoriaBase,
+        subcategoriaSeleccionada,
+        ...rest,
+        codigo: finalCode
+      };
+    }
+
+    const nuevoProducto = new Product(datosProducto);
+    await nuevoProducto.save();
+
+    res.status(201).json(nuevoProducto);
+  } catch (error) {
+    console.error('Error al registrar producto:', error);
+
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        message: 'Error de validación: faltan campos requeridos o algún dato no cumple el modelo.',
+        errors: error.errors
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        message: 'El código del producto ya existe. Usa otro código.',
+        detail: error.keyValue
+      });
+    }
+
+    res.status(500).json({
+      message: 'Error en el servidor al guardar el producto.',
+      detail: error.message
+    });
+  }
 });
 
 module.exports = router;
