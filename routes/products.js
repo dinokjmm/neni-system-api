@@ -15,6 +15,7 @@ const escapeRegExp = (value) => {
 
 // ----------------------------------------------------------------------
 // FUNCIÓN AUXILIAR: Obtiene el siguiente número de secuencia
+
 // ----------------------------------------------------------------------
 const getNextSecuencia = async (prefijoCompleto) => {
   try {
